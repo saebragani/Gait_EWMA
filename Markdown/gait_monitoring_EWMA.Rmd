@@ -41,17 +41,112 @@ options(qwraps2_markup = "markdown")
 
 ```
 
-
-
-
 ---
 
 # R Setup and Required Packages
 In this project, the open-source in red.
 
 
-```{r blah}
+```{r read_subg}
 
+for (id in setdiff(1:15, 13)) {
+  #################### Read start and end time of the subgroups
+  video <- read.csv(paste0(file="C:/Users/Saeb/Dropbox/SPC Gait Profile/Data/Csv_files/Sub", id, ".csv"))
+
+  video_leave <- video$Leaves
+  video_leave <- video_leave[!is.na(video_leave)]
+  video_leave <- video_leave - 600
+  video_leave <- video_leave[video_leave > 0]
+
+  video_enter <- video$Enters
+  video_enter <- video_enter[!is.na(video_enter)]
+  video_enter <- video_enter - 600
+  video_enter <- video_enter[video_enter > 0]
+
+  ################################################### Read from mat files
+  raw1 <- readMat(paste0("C:/Ergonomics lab/IMU data processing/Matlab Segmentation/low cutoff segment/EndToEnd_output/Subject", id, "_aZ_seg.mat"))
+
+  raw2 <- raw1$gait
+
+  num_rows <- length(raw2)/5
+
+  aM <- list("vector")
+  aS <- list("vector")
+  aL <- list("vector")
+  exp_time <- c()
+  for (i in 1:num_rows) {
+    aM[[i]] <- raw2[[1*num_rows + i]][[1]][1,]
+    aS[[i]] <- raw2[[2*num_rows + i]][[1]][1,]
+    aL[[i]] <- raw2[[3*num_rows + i]][[1]][1,]
+    exp_time[i] <- raw2[[i+4*num_rows]][[1]][1,1]
+  }
+
+  ###################################################### Create subgroups
+  if (video_leave[1] > video_enter[1]){
+    video_leave <- c(exp_time[1], video_leave)
+  }
+
+  if (tail(video_leave, 1) > tail(video_enter, 1)){
+    video_enter <- c(video_enter, tail(exp_time, 1))
+  }
+
+  conf <- 0.05 * mean(video_enter - video_leave) # 5% confidence for each subgroup
+
+  # Match video subroup times against the experimental times from mat files
+  leave_index <- match.closest(video_leave + conf, exp_time)
+  enter_index <- match.closest(video_enter - conf, exp_time)
+
+  aM_list <- list()
+  aS_list <- list()
+  aL_list <- list()
+  t_list <- list()
+  for (i in 1:length(leave_index)) {
+    aM_list[[i]] <- aM[leave_index[i]:enter_index[i]]
+    aS_list[[i]] <- aS[leave_index[i]:enter_index[i]]
+    aL_list[[i]] <- aL[leave_index[i]:enter_index[i]]
+    t_list[[i]] <- exp_time[leave_index[i]:enter_index[i]]
+  }
+
+  len <- c()
+  for (i in 1:length(aM_list)) {
+    len <- c(len, lengths(aM_list[[i]]))
+  }
+
+  cut_len <- quantile(len, 0.02)
+
+  for (i in 1:length(aM_list)) {
+    remove_ind <- which(lengths(aM_list[[i]]) < cut_len)
+    remove_ind <- c(remove_ind, 3000)
+    aM_list[[i]] <- aM_list[[i]][-remove_ind]
+    aS_list[[i]] <- aS_list[[i]][-remove_ind]
+    aL_list[[i]] <- aL_list[[i]][-remove_ind]
+    t_list[[i]] <- t_list[[i]][-remove_ind]
+  }
+
+  batchSize <- lengths(aM_list)
+
+  ###############################################
+  aM_list_all <- do.call(c, aM_list)
+  aS_list_all <- do.call(c, aS_list)
+  aL_list_all <- do.call(c, aL_list)
+  t_all <- do.call(c, t_list)
+  ###############################################
+  aM_mat <- do.call(rbind, aM_list_all)[,1:cut_len]
+  aS_mat <- do.call(rbind, aS_list_all)[,1:cut_len]
+  aL_mat <- do.call(rbind, aL_list_all)[,1:cut_len]
+
+  ##################
+  assign(paste0("sub", id, "_aMSLT"),
+         list(aMag=aM_mat, aSag=aS_mat, aLat=aL_mat, time=t_all, batchSize=batchSize))
+}
+
+########################################### Save
+
+save(sub1_aMSLT, sub2_aMSLT, sub3_aMSLT, sub4_aMSLT, sub5_aMSLT, sub6_aMSLT,
+     sub7_aMSLT, sub8_aMSLT, sub9_aMSLT, sub10_aMSLT, sub11_aMSLT, sub12_aMSLT,
+     sub14_aMSLT, sub15_aMSLT,
+     
+     file="C:/Users/Saeb/Desktop/subGs_for_depth.Rdata")
 
 ```
 
