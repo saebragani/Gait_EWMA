@@ -44,14 +44,41 @@ options(qwraps2_markup = "markdown")
 ---
 
 # R Setup and Required Packages
-In this project, the open-source in red.
+
+In the code chunk below, we load the packages used to support our analysis.  
+
+```{r packages, cache=FALSE}
+
+# check if packages are not installed; if yes, install missing packages
+packages = c("tidyverse", "magrittr", # typical data analysis packages
+             "MALDIquant", # match closest points between two vectors
+             "foreach", "parallel", # packages used for parallelizing some code chunks
+             "R.matlab")
+newPackages = packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(newPackages) > 0) install.packages(newPackages)
+
+# using the library command to load all packages; invisible used to avoid printing all packages and dependencies used
+invisible(lapply(packages, library, character.only = TRUE))
+
+# source("./Functions.R") # our custom built functions
+
+# set.seed(2020)
+# startTime <- Sys.time()
+```
+
+
+---
+
+# Read Data
+
+Read the data
 
 
 ```{r read_subg}
 
 for (id in setdiff(1:15, 13)) {
   #################### Read start and end time of the subgroups
-  video <- read.csv(paste0(file="C:/Users/Saeb/Dropbox/SPC Gait Profile/Data/Csv_files/Sub", id, ".csv"))
+  video <- read.csv(paste0(file="../Data/csvFiles/Sub", id, ".csv"))
 
   video_leave <- video$Leaves
   video_leave <- video_leave[!is.na(video_leave)]
@@ -64,7 +91,7 @@ for (id in setdiff(1:15, 13)) {
   video_enter <- video_enter[video_enter > 0]
 
   ################################################### Read from mat files
-  raw1 <- readMat(paste0("C:/Ergonomics lab/IMU data processing/Matlab Segmentation/low cutoff segment/EndToEnd_output/Subject", id, "_aZ_seg.mat"))
+  raw1 <- readMat(paste0("../Data/matFiles/Subject", id, "_aZ_seg.mat"))
 
   raw2 <- raw1$gait
 
@@ -145,7 +172,7 @@ for (id in setdiff(1:15, 13)) {
 save(sub1_aMSLT, sub2_aMSLT, sub3_aMSLT, sub4_aMSLT, sub5_aMSLT, sub6_aMSLT,
      sub7_aMSLT, sub8_aMSLT, sub9_aMSLT, sub10_aMSLT, sub11_aMSLT, sub12_aMSLT,
      sub14_aMSLT, sub15_aMSLT,
-     
+
      file="C:/Users/Saeb/Desktop/subGs_for_depth.Rdata")
 
 ```

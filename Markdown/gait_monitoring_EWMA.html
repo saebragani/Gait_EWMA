@@ -10,7 +10,7 @@
 
 
 
-<meta name="date" content="2020-11-03" />
+<meta name="date" content="2020-11-12" />
 
 <title>A personalized and non-parametric framework for detecting changes in gait cycles</title>
 
@@ -1603,7 +1603,7 @@ Department of Industrial and Systems Engineering, University at Buffalo<br><h4 c
 <address class="author_afil">
 Farmer School of Business, Miami University<br><h4 class="author">Allison Jones Farmer<a href="#fn5" class="footnote-ref" id="fnref5"><sup>5</sup></a></h4>
 <address class="author_afil">
-Farmer School of Business, Miami University<br><h4 class="date">November 03, 2020</h4>
+Farmer School of Business, Miami University<br><h4 class="date">November 12, 2020</h4>
 
 </div>
 
@@ -1611,7 +1611,125 @@ Farmer School of Business, Miami University<br><h4 class="date">November 03, 202
 <hr />
 <div id="r-setup-and-required-packages" class="section level1">
 <h1><span class="header-section-number">1</span> R Setup and Required Packages</h1>
-<p>In this project, the open-source in red.</p>
+<p>In the code chunk below, we load the packages used to support our analysis.</p>
+<pre class="r"><code># check if packages are not installed; if yes, install missing packages
+packages = c(&quot;tidyverse&quot;, &quot;magrittr&quot;, # typical data analysis packages
+             &quot;MALDIquant&quot;, # match closest points between two vectors
+             &quot;foreach&quot;, &quot;parallel&quot;, # packages used for parallelizing some code chunks
+             &quot;R.matlab&quot;)
+newPackages = packages[!(packages %in% installed.packages()[,&quot;Package&quot;])]
+if(length(newPackages) &gt; 0) install.packages(newPackages)
+
+# using the library command to load all packages; invisible used to avoid printing all packages and dependencies used
+invisible(lapply(packages, library, character.only = TRUE))
+
+# source(&quot;./Functions.R&quot;) # our custom built functions
+
+# set.seed(2020)
+# startTime &lt;- Sys.time()</code></pre>
+<hr />
+</div>
+<div id="read-data" class="section level1">
+<h1><span class="header-section-number">2</span> Read Data</h1>
+<p>Read the data</p>
+<pre class="r"><code>for (id in setdiff(1:15, 13)) {
+  #################### Read start and end time of the subgroups
+  video &lt;- read.csv(paste0(file=&quot;../Data/csvFiles/Sub&quot;, id, &quot;.csv&quot;))
+
+  video_leave &lt;- video$Leaves
+  video_leave &lt;- video_leave[!is.na(video_leave)]
+  video_leave &lt;- video_leave - 600
+  video_leave &lt;- video_leave[video_leave &gt; 0]
+
+  video_enter &lt;- video$Enters
+  video_enter &lt;- video_enter[!is.na(video_enter)]
+  video_enter &lt;- video_enter - 600
+  video_enter &lt;- video_enter[video_enter &gt; 0]
+
+  ################################################### Read from mat files
+  raw1 &lt;- readMat(paste0(&quot;../Data/matFiles/Subject&quot;, id, &quot;_aZ_seg.mat&quot;))
+
+  raw2 &lt;- raw1$gait
+
+  num_rows &lt;- length(raw2)/5
+
+  aM &lt;- list(&quot;vector&quot;)
+  aS &lt;- list(&quot;vector&quot;)
+  aL &lt;- list(&quot;vector&quot;)
+  exp_time &lt;- c()
+  for (i in 1:num_rows) {
+    aM[[i]] &lt;- raw2[[1*num_rows + i]][[1]][1,]
+    aS[[i]] &lt;- raw2[[2*num_rows + i]][[1]][1,]
+    aL[[i]] &lt;- raw2[[3*num_rows + i]][[1]][1,]
+    exp_time[i] &lt;- raw2[[i+4*num_rows]][[1]][1,1]
+  }
+
+  ###################################################### Create subgroups
+  if (video_leave[1] &gt; video_enter[1]){
+    video_leave &lt;- c(exp_time[1], video_leave)
+  }
+
+  if (tail(video_leave, 1) &gt; tail(video_enter, 1)){
+    video_enter &lt;- c(video_enter, tail(exp_time, 1))
+  }
+
+  conf &lt;- 0.05 * mean(video_enter - video_leave) # 5% confidence for each subgroup
+
+  # Match video subroup times against the experimental times from mat files
+  leave_index &lt;- match.closest(video_leave + conf, exp_time)
+  enter_index &lt;- match.closest(video_enter - conf, exp_time)
+
+  aM_list &lt;- list()
+  aS_list &lt;- list()
+  aL_list &lt;- list()
+  t_list &lt;- list()
+  for (i in 1:length(leave_index)) {
+    aM_list[[i]] &lt;- aM[leave_index[i]:enter_index[i]]
+    aS_list[[i]] &lt;- aS[leave_index[i]:enter_index[i]]
+    aL_list[[i]] &lt;- aL[leave_index[i]:enter_index[i]]
+    t_list[[i]] &lt;- exp_time[leave_index[i]:enter_index[i]]
+  }
+
+  len &lt;- c()
+  for (i in 1:length(aM_list)) {
+    len &lt;- c(len, lengths(aM_list[[i]]))
+  }
+
+  cut_len &lt;- quantile(len, 0.02)
+
+  for (i in 1:length(aM_list)) {
+    remove_ind &lt;- which(lengths(aM_list[[i]]) &lt; cut_len)
+    remove_ind &lt;- c(remove_ind, 3000)
+    aM_list[[i]] &lt;- aM_list[[i]][-remove_ind]
+    aS_list[[i]] &lt;- aS_list[[i]][-remove_ind]
+    aL_list[[i]] &lt;- aL_list[[i]][-remove_ind]
+    t_list[[i]] &lt;- t_list[[i]][-remove_ind]
+  }
+
+  batchSize &lt;- lengths(aM_list)
+
+  ###############################################
+  aM_list_all &lt;- do.call(c, aM_list)
+  aS_list_all &lt;- do.call(c, aS_list)
+  aL_list_all &lt;- do.call(c, aL_list)
+  t_all &lt;- do.call(c, t_list)
+  ###############################################
+  aM_mat &lt;- do.call(rbind, aM_list_all)[,1:cut_len]
+  aS_mat &lt;- do.call(rbind, aS_list_all)[,1:cut_len]
+  aL_mat &lt;- do.call(rbind, aL_list_all)[,1:cut_len]
+
+  ##################
+  assign(paste0(&quot;sub&quot;, id, &quot;_aMSLT&quot;),
+         list(aMag=aM_mat, aSag=aS_mat, aLat=aL_mat, time=t_all, batchSize=batchSize))
+}
+
+########################################### Save
+
+save(sub1_aMSLT, sub2_aMSLT, sub3_aMSLT, sub4_aMSLT, sub5_aMSLT, sub6_aMSLT,
+     sub7_aMSLT, sub8_aMSLT, sub9_aMSLT, sub10_aMSLT, sub11_aMSLT, sub12_aMSLT,
+     sub14_aMSLT, sub15_aMSLT,
+
+     file=&quot;C:/Users/Saeb/Desktop/subGs_for_depth.Rdata&quot;)</code></pre>
 <hr />
 </div>
 <div id="references" class="section level1 unnumbered">
