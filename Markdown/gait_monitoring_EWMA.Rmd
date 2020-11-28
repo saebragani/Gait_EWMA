@@ -22,6 +22,7 @@ output:
     theme: simplex
     paged_df: TRUE
     code_folding: show
+    code_download: TRUE
   includes:
     in_header: structure.tex
 ---
@@ -45,14 +46,14 @@ options(qwraps2_markup = "markdown")
 
 # R Setup and Required Packages
 
-In the code chunk below, we load the packages used to support our analysis.  
+In the following code chunk we load the packages used to support our analysis.  
 
 ```{r packages, cache=FALSE}
 
 # check if packages are not installed; if yes, install missing packages
 packages = c("tidyverse", "magrittr", # typical data analysis packages
              "MALDIquant", # match closest points between two vectors
-             "foreach", "parallel", # packages used for parallelizing some code chunks
+             "foreach", "doParallel", "parallel", # packages for parallelization
              "R.matlab")
 newPackages = packages[!(packages %in% installed.packages()[,"Package"])]
 if(length(newPackages) > 0) install.packages(newPackages)
@@ -69,12 +70,14 @@ invisible(lapply(packages, library, character.only = TRUE))
 
 ---
 
-# Read Data
+# Gait Acceleration Data and Rational Subgroups
 
-Read the data
+We converted the raw IMU acceleration signals in the local to the global reference frame and removed the gravity. The acceleration signals were then transformed back to the local reference frame. Sagittal acceleration, lateral acceleration, and acceleration magnitude signals were then calculated. We used the vertical acceleration component to segment the gait cycles in order to isolate individual gait cycles. The acceleration profiles along with the experimental time stamps were stored in mat files.
+
+In this code chunk we load the segmented acceleration mat files. The $1^{st}$ 10 minutes of the data were considered as warm up period and thus excluded form the analysis. The acceleration profiles of the gait cycles during each walking cycle were grouped into a rational subgroup. We stored the start and end times of the walking cycles in csv files and loaded and used them in the following code chunk. The acceleration profiles within each start and end times to subgroup the gait cycles.
 
 
-```{r read_subg}
+```{r read-subg}
 
 for (id in setdiff(1:15, 13)) {
   #################### Read start and end time of the subgroups
@@ -168,15 +171,157 @@ for (id in setdiff(1:15, 13)) {
 }
 
 ########################################### Save
-
 save(sub1_aMSLT, sub2_aMSLT, sub3_aMSLT, sub4_aMSLT, sub5_aMSLT, sub6_aMSLT,
      sub7_aMSLT, sub8_aMSLT, sub9_aMSLT, sub10_aMSLT, sub11_aMSLT, sub12_aMSLT,
      sub14_aMSLT, sub15_aMSLT,
 
-     file="C:/Users/Saeb/Desktop/subGs_for_depth.Rdata")
+     file="../Data/rData/subGs_for_depth.Rdata")
+```
+
+
+# Depth Calculation
+
+Explain about depth concept in general; centrality and outlyingness
+
+## Mode Depth
+
+Calculate mode depth...
+
+```{r mode-depth, eval=FALSE}
+
+load(file="../Data/rData/subGs_for_depth.Rdata")
+
+cores = detectCores() - 2 # to give the server some breathing Room
+cl = makePSOCKcluster(cores)
+registerDoParallel(cl)
+
+for (id in setdiff(1:15, 13)) {
+  
+  aMag <- get(paste0("sub", id, "_aMSLT"))$aMag
+  tExp <- get(paste0("sub", id, "_aMSLT"))$time
+  
+  ################################## Mode Depth
+  inControl <- aMag[1:500,]
+  inControlDepth <- {depth.mode(fdata(inControl))}$dep
+  
+  ###################### foreach
+  onlineDepth <- c()
+  end <- nrow(aMag)
+  onlineDepth <- foreach(i=501:end, .packages = c('fda.usc', 'tidyverse'),
+                         .combine='c') %dopar% {
+                           temp1 <- aMag %>% .[i,]
+                           append1 <- rbind(inControl, temp1)
+                           temp2 <- depth.mode(fdata(append1))
+                           
+                           temp3 <- temp2$dep %>% .[501]
+                           temp3
+                         }
+  
+  modeDepth <- c(inControlDepth, onlineDepth)
+  
+  assign(paste0("sub", id, "_mode_mag"),
+         list(modeDepth=modeDepth, tExp=tExp))
+}
+
+save(sub1_mode_mag, sub2_mode_mag, sub3_mode_mag, sub4_mode_mag, sub5_mode_mag, sub6_mode_mag,
+     sub7_mode_mag, sub8_mode_mag, sub9_mode_mag, sub10_mode_mag, sub11_mode_mag, sub12_mode_mag,
+     sub14_mode_mag, sub15_mode_mag,
+     file="../Data/rData/mode_mag.Rdata")
+```
+
+<!-- ## Visualize the Mode Depth {.tabset .tabset-fade} -->
+
+<!-- ```{r vis_Mode, fig.align="center", results="asis", out.width="100%"} -->
+
+<!-- load(file="../Data/rData/mode_mag.Rdata") -->
+
+<!-- for (id in setdiff(1:15, 13)) { -->
+<!--   dep <- get(paste0("sub", id, "_MFHD"))$MFHDdepth -->
+<!--   t <- get(paste0("sub", id, "_MFHD"))$tExp -->
+
+<!--   cat("###", paste0("Subject", id), "{-}",'\n') -->
+<!--   plot(t, dep, pch=16, cex=1,col=c(rep("red", 500), rep("black", length(dep)-500))) -->
+<!--   legend("topright", legend=c("Baseline data", "New data"), col=c("red", "black")) -->
+<!--   cat('\n \n') -->
+
+<!-- } -->
+
+<!-- ``` -->
+
+## MFHD Depth
+
+Calculate MFHD depth...
+
+Explain since it take very long it was performed on supercomputer cluster in parallel and the eval option in the following code chunk was set to false since this could take weeks to run on the local computer.
+
+```{r MFHD-depth, eval=FALSE}
+
+#################################################
+load(file="../Data/rData/subGs_for_depth.Rdata")
+
+cores = detectCores() - 2 # to give the server some breathing Room
+cl = makePSOCKcluster(cores)
+registerDoParallel(cl)
+
+for (id in setdiff(1:15, 13)) {
+  
+  aSag <- get(paste0("sub", id, "_aMSLT"))$aSag
+  aLat <- get(paste0("sub", id, "_aMSLT"))$aLat
+  tExp <- get(paste0("sub", id, "_aMSLT"))$time
+  
+  ################################## Mode Depth
+  inControlSag <- aSag[1:500,]
+  inControlLat <- aLat[1:500,]
+  inControlDepth <- {MFHD(y1=inControlSag, y2=inControlLat, alpha=0.125, Beta=0.5)}$MFHDdepth[1,]
+  
+  ###################### foreach
+  onlineDepth <- c()
+  end <- nrow(aSag)
+  onlineDepth <- foreach(i=501:end, .packages = c('fda.usc', 'tidyverse', 'MFHD'),
+                         .combine='c') %dopar% {
+                           temp1 <- aSag %>% .[i,]
+                           temp2 <- aLat %>% .[i,]
+                           
+                           append1 <- rbind(inControlSag, temp1)
+                           append2 <- rbind(inControlLat, temp2)
+                           
+                           temp3 <- MFHD(y1=append1, y2=append2, alpha=0.125, Beta=0.5)
+                           
+                           temp4 <- temp3$MFHDdepth %>% .[1,501]
+                           temp4
+                         }
+  
+  MFHDdepth <- c(inControlDepth, onlineDepth)
+  
+  assign(paste0("sub", id, "_MFHD"),
+         list(MFHDdepth=MFHDdepth, tExp=tExp))
+}
+
+save(sub1_MFHD, sub2_MFHD, sub3_MFHD, sub4_MFHD, sub5_MFHD, sub6_MFHD, sub7_MFHD, sub8_MFHD,
+     sub9_MFHD, sub10_MFHD, sub11_MFHD, sub12_MFHD, sub14_MFHD, sub15_MFHD,
+     file="../Data/rData/MFHD.Rdata")
 
 ```
 
+## Visualize the MFHD Depth {.tabset .tabset-fade}
+
+```{r vis_MFHD, fig.align="center", results="asis", out.width="100%"}
+
+load(file="../Data/rData/MFHD.Rdata")
+
+for (id in setdiff(1:15, 13)) {
+  dep <- get(paste0("sub", id, "_MFHD"))$MFHDdepth
+  t <- get(paste0("sub", id, "_MFHD"))$tExp
+  
+  cat("###", paste0("Subject", id), "{-}",'\n')
+  plot(t, dep, pch=16, cex=1,col=c(rep("red", 500), rep("black", length(dep)-500)))
+  legend("topright", legend=c("Baseline data", "New data"), col=c("red", "black"),
+         pch=16)
+  cat('\n \n')
+  
+}
+
+```
 
 
 ---
