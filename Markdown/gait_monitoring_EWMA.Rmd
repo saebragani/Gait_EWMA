@@ -229,24 +229,24 @@ save(sub1_mode_mag, sub2_mode_mag, sub3_mode_mag, sub4_mode_mag, sub5_mode_mag, 
      file="../Data/rData/mode_mag.Rdata")
 ```
 
-<!-- ## Visualize the Mode Depth {.tabset .tabset-fade} -->
+## Visualize the Mode Depth {.tabset .tabset-fade}
 
-<!-- ```{r vis_Mode, fig.align="center", results="asis", out.width="100%"} -->
+```{r vis_Mode, fig.align="center", results="asis", out.width="100%"}
 
-<!-- load(file="../Data/rData/mode_mag.Rdata") -->
+load(file="../Data/rData/mode_mag.Rdata")
 
-<!-- for (id in setdiff(1:15, 13)) { -->
-<!--   dep <- get(paste0("sub", id, "_MFHD"))$MFHDdepth -->
-<!--   t <- get(paste0("sub", id, "_MFHD"))$tExp -->
+for (id in setdiff(1:15, 13)) {
+  depthMode <- get(paste0("sub", id, "_mode_mag"))$modeDepth
+  tMode <- get(paste0("sub", id, "_mode_mag"))$tExp
 
-<!--   cat("###", paste0("Subject", id), "{-}",'\n') -->
-<!--   plot(t, dep, pch=16, cex=1,col=c(rep("red", 500), rep("black", length(dep)-500))) -->
-<!--   legend("topright", legend=c("Baseline data", "New data"), col=c("red", "black")) -->
-<!--   cat('\n \n') -->
+  cat("###", paste0("Subject", id, " Mode Depth"), "{-}",'\n')
+  plot(tMode, depthMode, pch=16, cex=1,col=c(rep("red", 500), rep("black", length(depthMode)-500)))
+  legend("topright", legend=c("Baseline data", "New data"), col=c("red", "black"))
+  cat('\n \n')
 
-<!-- } -->
+}
 
-<!-- ``` -->
+```
 
 ## MFHD Depth
 
@@ -310,11 +310,11 @@ save(sub1_MFHD, sub2_MFHD, sub3_MFHD, sub4_MFHD, sub5_MFHD, sub6_MFHD, sub7_MFHD
 load(file="../Data/rData/MFHD.Rdata")
 
 for (id in setdiff(1:15, 13)) {
-  dep <- get(paste0("sub", id, "_MFHD"))$MFHDdepth
-  t <- get(paste0("sub", id, "_MFHD"))$tExp
+  depthMFHD <- get(paste0("sub", id, "_MFHD"))$MFHDdepth
+  tMFHD <- get(paste0("sub", id, "_MFHD"))$tExp
   
-  cat("###", paste0("Subject", id), "{-}",'\n')
-  plot(t, dep, pch=16, cex=1,col=c(rep("red", 500), rep("black", length(dep)-500)))
+  cat("###", paste0("Subject", id, " MFHD Depth"), "{-}",'\n')
+  plot(tMFHD, depthMFHD, pch=16, cex=1,col=c(rep("red", 500), rep("black", length(depthMFHD)-500)))
   legend("topright", legend=c("Baseline data", "New data"), col=c("red", "black"),
          pch=16)
   cat('\n \n')
