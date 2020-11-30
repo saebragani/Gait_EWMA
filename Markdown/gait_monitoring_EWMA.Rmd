@@ -355,7 +355,7 @@ for (id in setdiff(1:15, 13)) {
 ```
 
 
-## EWMA on Subgroup EWMA Depth Values {.tabset .tabset-fade}
+## EWMA on Subgroup MFHD Depth Values {.tabset .tabset-fade}
 
 In the following code chunk we have constructed the EWMA control charts on the MFHD depth values using the *qcc* package in R and presented the charts.
 
